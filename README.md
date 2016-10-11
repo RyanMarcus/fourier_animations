@@ -13,3 +13,5 @@ To run, modify `random_phase.py` with the appropriate filename and number of com
 * `numpy`
 
 The code was ran using Python 3.5.2.
+
+![Brandeis University, animated](https://github.com/RyanMarcus/fourier_animations/blob/master/output/brandeis.gif?raw=true)
