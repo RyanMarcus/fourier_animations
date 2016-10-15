@@ -5,17 +5,24 @@ import random
 import math
 import scipy.misc
 from multiprocessing import Pool
+import imageio
+import parallelTestModule
+import glob
+import os
 
-def pm2i(mag, phase):
-    return mag * np.exp(1j * phase)
 
 # mode = "L" means grayscale
 img = scipy.ndimage.imread("flower.jpg")
 fft = [np.fft.rfft2(img[:,:,x]) for x in range(img.shape[2])]
 
-# clear the DC componenet (linear shift)
-for color_channel in fft:
-    color_channel[0][0] = 0
+def file_key(path):
+		fname = os.path.split(path)[1]
+		number = fname.strip("frame").strip(".png")
+		return int(number)
+	
+def pm2i(mag, phase):
+    return mag * np.exp(1j * phase)
+
 
 def gen_with_k_components(k):
     toR = []
@@ -51,5 +58,16 @@ def gen():
         values = enumerate(np.linspace(0, 2*math.pi, num=100))
         p.map(gen_image, values)
 
-gen()
+if __name__=="__main__":
+    extractor = parallelTestModule.ParallelExtractor()
+    extractor.runInParallel(numProcesses=2, numThreads=4)
 
+
+    # clear the DC componenet (linear shift)
+    for color_channel in fft:
+        color_channel[0][0] = 0
+    gen()
+    with imageio.get_writer('movie.gif', mode='I') as writer:
+        for filename in sorted(glob.glob("frames/*.png"), key=file_key):
+            image = imageio.imread(filename)
+            writer.append_data(image)
