@@ -1,5 +1,6 @@
 import numpy as np
 import scipy.ndimage
+import scipy.misc as smp
 import matplotlib.pyplot as plt
 import random
 import math
@@ -9,6 +10,7 @@ import imageio
 import parallelTestModule
 import glob
 import os
+import flask
 
 
 
@@ -54,6 +56,24 @@ def gen(fft, num=100):
     with Pool(8) as p:
         values = enumerate(np.linspace(0, 2*math.pi, num=num))
         p.starmap(gen_image, zip(values, [fft]*num))
+		
+def make_image_from_pixels(pixel_data, new_image_name):
+    # pixel data is a JSON parsed dict 
+    # Red: array of red, Blue: array of blue, Green: array of green
+    # Height: height of array
+    new_image = np.zeros( (pixel_data['height'],pixel_data['width'],3), dtype=np.uint8 )
+    combined_rgb = list(zip(pixel_data['red'], pixel_data['blue'], pixel_data['green']))
+    #print (combined_rgb)
+    i = 0
+    for row in new_image:
+        for column in row:
+            for color in range(3):
+                column[color]=combined_rgb[i][color]
+            i+=1
+    img = smp.toimage( new_image )       # Create a PIL image
+    img.save(new_image_name, "PNG")
+    #img.show()
+    
 
 def read_image_and_convert_gif(image_name):
     extractor = parallelTestModule.ParallelExtractor()
@@ -75,4 +95,13 @@ def read_image_and_convert_gif(image_name):
 			
 			
 if __name__=="__main__":
-    read_image_and_convert_gif('flower.jpg')
+    values = [int(x) for x in open('data.txt').read().split(',')]
+    pixel_data = {
+        'red':values, 
+        'blue':values,
+        'green': values,
+        'height': 520,
+        'width': 504,
+    }
+    make_image_from_pixels(pixel_data, 'crap.png')
+    read_image_and_convert_gif('crap.png')
