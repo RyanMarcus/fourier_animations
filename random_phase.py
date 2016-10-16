@@ -10,8 +10,21 @@ import imageio
 import parallelTestModule
 import glob
 import os
-import flask
+from flask import Flask, app
+import secrets
+from imgurpython import ImgurClient
+from uuid import uuid4
 
+
+app = Flask(__name__)
+
+@app.route("/")
+def index():
+    return "Hello World"
+    
+@app.route("/get_shit")
+def index2():
+    return "Hello World"
 
 
 def file_key(path):
@@ -75,7 +88,7 @@ def make_image_from_pixels(pixel_data, new_image_name):
     #img.show()
     
 
-def read_image_and_convert_gif(image_name):
+def read_image_and_convert_gif(image_name, gif_name):
     extractor = parallelTestModule.ParallelExtractor()
     extractor.runInParallel(numProcesses=2, numThreads=4)
 
@@ -88,13 +101,20 @@ def read_image_and_convert_gif(image_name):
         color_channel[0][0] = 0
     gen(fft)
     print("Frames Generated: Generating GIF (Pronounced Jif)")
-    with imageio.get_writer('movie.gif', mode='I') as writer:
+    with imageio.get_writer(gif_name, mode='I') as writer:
         for filename in sorted(glob.glob("frames/*.png"), key=file_key):
             image = imageio.imread(filename)
             writer.append_data(image)
-			
+            
+def upload_to_imgur(image_name):
+    client = ImgurClient(secrets.imgur_key, secrets.imgur_secret)
+    r = client.upload_from_path(image_name)
+    return r
 			
 if __name__=="__main__":
+    #app.run()
+    
+    """
     values = [int(x) for x in open('data.txt').read().split(',')]
     pixel_data = {
         'red':values, 
@@ -104,4 +124,6 @@ if __name__=="__main__":
         'width': 504,
     }
     make_image_from_pixels(pixel_data, 'crap.png')
-    read_image_and_convert_gif('crap.png')
+    read_image_and_convert_gif('crap.png', 'trippy.gif')
+    upload_to_imgur('trippy.gif')
+    """
