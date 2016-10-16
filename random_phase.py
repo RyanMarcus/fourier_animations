@@ -10,20 +10,17 @@ import imageio
 import parallelTestModule
 import glob
 import os
-from flask import Flask, app
+from flask import Flask, app, request, jsonify
 import secrets
 from imgurpython import ImgurClient
 from uuid import uuid4
+import shutil
 
 
 app = Flask(__name__)
 
 @app.route("/")
 def index():
-    return "Hello World"
-    
-@app.route("/get_shit")
-def index2():
     return "Hello World"
 
 
@@ -60,15 +57,15 @@ def gen_with_k_components(k, fft):
         toR.append(ifft)
     return np.dstack(toR)
 
-def gen_image(inp, fft):
+def gen_image(inp, fft, user_uuid):
     idx, i = inp
     x = gen_with_k_components(i, fft)
-    scipy.misc.imsave("frames/frame{}.png".format(idx), x)
+    scipy.misc.imsave("{}/frame{}.png".format(user_uuid, idx), x)
 
-def gen(fft, num=100):
+def gen(fft, user_uuid, num=100):
     with Pool(8) as p:
         values = enumerate(np.linspace(0, 2*math.pi, num=num))
-        p.starmap(gen_image, zip(values, [fft]*num))
+        p.starmap(gen_image, zip(values, [fft]*num, [user_uuid]*num))
 		
 def make_image_from_pixels(pixel_data, new_image_name):
     # pixel data is a JSON parsed dict 
@@ -88,7 +85,11 @@ def make_image_from_pixels(pixel_data, new_image_name):
     #img.show()
     
 
-def read_image_and_convert_gif(image_name, gif_name):
+def read_image_and_convert_gif(person_uuid):
+    
+    image_name = '{}.png'.format(person_uuid)
+    gif_name = '{}.gif'.format(person_uuid)
+
     extractor = parallelTestModule.ParallelExtractor()
     extractor.runInParallel(numProcesses=2, numThreads=4)
 
@@ -99,10 +100,10 @@ def read_image_and_convert_gif(image_name, gif_name):
     # clear the DC componenet (linear shift)
     for color_channel in fft:
         color_channel[0][0] = 0
-    gen(fft)
+    gen(fft, person_uuid)
     print("Frames Generated: Generating GIF (Pronounced Jif)")
     with imageio.get_writer(gif_name, mode='I') as writer:
-        for filename in sorted(glob.glob("frames/*.png"), key=file_key):
+        for filename in sorted(glob.glob("{}/*.png".format(person_uuid)), key=file_key):
             image = imageio.imread(filename)
             writer.append_data(image)
             
@@ -110,11 +111,26 @@ def upload_to_imgur(image_name):
     client = ImgurClient(secrets.imgur_key, secrets.imgur_secret)
     r = client.upload_from_path(image_name)
     return r
-			
-if __name__=="__main__":
-    #app.run()
     
-    """
+@app.route("/getgif", methods=["POST"])
+def pixels_to_gif_api():
+    person_uuid = str(uuid4())
+    pixel_data = request.get_json(force=True)
+    make_image_from_pixels(pixel_data, "{}.png".format(person_uuid))
+    read_image_and_convert_gif(person_uuid)
+    r = upload_to_imgur("{}.gif".format(person_uuid))
+    os.remove("{}.png".format(person_uuid))
+    os.remove("{}.gif".format(person_uuid))
+    shutil.rmtree(person_uuid)
+    return jsonify(r)
+    
+            
+if __name__=="__main__":
+    #app.run('0.0.0.0')
+    
+    #"""
+    person_uuid = str(uuid4())
+    os.mkdir(person_uuid)
     values = [int(x) for x in open('data.txt').read().split(',')]
     pixel_data = {
         'red':values, 
@@ -123,7 +139,12 @@ if __name__=="__main__":
         'height': 520,
         'width': 504,
     }
-    make_image_from_pixels(pixel_data, 'crap.png')
-    read_image_and_convert_gif('crap.png', 'trippy.gif')
-    upload_to_imgur('trippy.gif')
-    """
+    make_image_from_pixels(pixel_data, person_uuid+".png")
+    read_image_and_convert_gif(person_uuid)
+    r = upload_to_imgur(person_uuid+'.gif')
+    print(r)
+    os.remove("{}.png".format(person_uuid))
+    os.remove("{}.gif".format(person_uuid))
+    shutil.rmtree(person_uuid)
+
+    #"""
