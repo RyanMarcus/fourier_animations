@@ -126,9 +126,9 @@ def pixels_to_gif_api():
     
             
 if __name__=="__main__":
-    #app.run('0.0.0.0')
+    app.run('0.0.0.0')
     
-    #"""
+    """
     person_uuid = str(uuid4())
     os.mkdir(person_uuid)
     values = [int(x) for x in open('data.txt').read().split(',')]
@@ -147,4 +147,4 @@ if __name__=="__main__":
     os.remove("{}.gif".format(person_uuid))
     shutil.rmtree(person_uuid)
 
-    #"""
+    """
