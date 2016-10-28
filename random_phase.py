@@ -2,7 +2,6 @@ import numpy as np
 import scipy.ndimage
 import scipy.misc as smp
 import matplotlib.pyplot as plt
-import random
 import math
 import scipy.misc
 from multiprocessing import Pool
@@ -10,25 +9,27 @@ import imageio
 import parallelTestModule
 import glob
 import os
-from flask import Flask, app, request, jsonify
 import secrets
-from imgurpython import ImgurClient
+import shutil
+import sys
+
+
+try:
+    from imgurpython import ImgurClient
+    imgur_support = True
+except ImportError:
+    imgur_support = False
+
 from uuid import uuid4
 import shutil
 
 
-app = Flask(__name__)
-
-@app.route("/")
-def index():
-    return "Hello World"
-
-
 def file_key(path):
-		fname = os.path.split(path)[1]
-		number = fname.strip("frame").strip(".png")
-		return int(number)
-	
+    fname = os.path.split(path)[1]
+    number = fname.strip("frame").strip(".png")
+    return int(number)
+
+
 def pm2i(mag, phase):
     return mag * np.exp(1j * phase)
 
@@ -66,11 +67,18 @@ def gen(fft, user_uuid, num=100):
     with Pool(8) as p:
         values = enumerate(np.linspace(0, 2*math.pi, num=num))
         p.starmap(gen_image, zip(values, [fft]*num, [user_uuid]*num))
-		
+
+
 def make_image_from_pixels(pixel_data, new_image_name):
     # pixel data is a JSON parsed dict 
     # Red: array of red, Blue: array of blue, Green: array of green
     # Height: height of array
+    if pixel_data['height']*pixel_data['width'] != len(pixel_data['red']):
+        print("Bad height and width")
+        sys.exit(1)
+    if pixel_data['red']!=pixel_data['blue'] or pixel_data['red'] !=pixel_data['green']:
+        print("Pixel data not same size")
+        sys.exit(1)
     new_image = np.zeros( (pixel_data['height'],pixel_data['width'],3), dtype=np.uint8 )
     combined_rgb = list(zip(pixel_data['red'], pixel_data['blue'], pixel_data['green']))
     #print (combined_rgb)
@@ -85,15 +93,17 @@ def make_image_from_pixels(pixel_data, new_image_name):
     #img.show()
     
 
-def read_image_and_convert_gif(person_uuid):
+def read_image_and_convert_gif(person_uuid, image_name=None):
     
-    image_name = '{}.png'.format(person_uuid)
+    if image_name==None:
+        image_name = '{}.png'.format(person_uuid)
     gif_name = '{}.gif'.format(person_uuid)
 
+    # Stolen from Stack Overflow
     extractor = parallelTestModule.ParallelExtractor()
     extractor.runInParallel(numProcesses=2, numThreads=4)
 
-	# mode = "L" means grayscale
+    # mode = "L" means grayscale
     img = scipy.ndimage.imread(image_name)
     fft = [np.fft.rfft2(img[:,:,x]) for x in range(img.shape[2])]
 
@@ -109,42 +119,48 @@ def read_image_and_convert_gif(person_uuid):
             
 def upload_to_imgur(image_name):
     client = ImgurClient(secrets.imgur_key, secrets.imgur_secret)
+    print(image_name)
     r = client.upload_from_path(image_name)
-    return r
-    
-@app.route("/getgif", methods=["POST"])
-def pixels_to_gif_api():
-    person_uuid = str(uuid4())
-    pixel_data = request.get_json(force=True)
-    make_image_from_pixels(pixel_data, "{}.png".format(person_uuid))
-    read_image_and_convert_gif(person_uuid)
-    r = upload_to_imgur("{}.gif".format(person_uuid))
-    os.remove("{}.png".format(person_uuid))
-    os.remove("{}.gif".format(person_uuid))
-    shutil.rmtree(person_uuid)
-    return jsonify(r)
-    
+    return r    
             
 if __name__=="__main__":
-    app.run('0.0.0.0')
-    
-    """
     person_uuid = str(uuid4())
     os.mkdir(person_uuid)
-    values = [int(x) for x in open('data.txt').read().split(',')]
-    pixel_data = {
-        'red':values, 
-        'blue':values,
-        'green': values,
-        'height': 520,
-        'width': 504,
-    }
-    make_image_from_pixels(pixel_data, person_uuid+".png")
-    read_image_and_convert_gif(person_uuid)
-    r = upload_to_imgur(person_uuid+'.gif')
-    print(r)
-    os.remove("{}.png".format(person_uuid))
-    os.remove("{}.gif".format(person_uuid))
-    shutil.rmtree(person_uuid)
+    choice = input("Press 1 to read from pixel data, press 2 to read from an image: ")
+    if choice == "1":
+        values = [int(x) for x in open(input("Name of file: ")).read().split(',')]
+        pixel_data = {
+            'red': values,
+            'blue': values,
+            'green': values,
+            'height': int(input("Enter height: ")),  # 520
+            'width':  int(input("Enter width: ")),  # 504
+        }
+        make_image_from_pixels(pixel_data, person_uuid+".png")
+        picture_location = None
+    elif choice == "2":
+        picture_location = input("Enter path for image: ")
+    else:
+        print("Exiting")
+        sys.exit(1)
 
-    """
+    read_image_and_convert_gif(person_uuid, picture_location)
+    if imgur_support:
+        should_upload = input("Upload to imgur? Y/N: ").lower() not in ["n",""]
+        if should_upload:
+            try:
+                r = upload_to_imgur(person_uuid+'.gif')
+                print("URL: {}".format(r['link']))
+
+            except:
+                print("Upload failed")
+    else:
+        print("Can't upload to imgur. Please do pip install imgurpython")
+
+    shutil.move("{}.gif".format(person_uuid), "result.gif")
+    print("Gif saved as result.gif")
+    try:
+        os.remove("{}.png".format(person_uuid))
+    except FileNotFoundError:
+        pass
+    shutil.rmtree(person_uuid)

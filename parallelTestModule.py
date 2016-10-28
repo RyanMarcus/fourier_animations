@@ -1,3 +1,5 @@
+# Stolen from stackoverflow
+# Makes pool not fork bomb windows
 import multiprocessing
 from multiprocessing import Process
 import threading
